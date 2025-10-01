@@ -9,7 +9,7 @@ def generate_answer_stream(query: str, context: str = ""):
     Streaming từng phần câu trả lời từ LLM.
     """
     prompt = f"""
-Bạn là trợ lý AI. Trả lời câu hỏi dựa trên ngữ cảnh nếu có.
+Bạn là trợ lý AI. Trả lời câu hỏi dựa trên ngữ cảnh nếu có. Nếu không biết, hãy trả lời thành thật rằng bạn không biết.
 Ngữ cảnh:
 {context}
 
