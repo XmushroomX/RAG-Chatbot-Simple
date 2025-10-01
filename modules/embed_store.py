@@ -2,16 +2,37 @@
 import os
 import uuid
 import chromadb
+import torch
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2txtLoader
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
 
 class EmbedStore:
     def __init__(self, collection_name: str = "rag_collection"):
+        # ======================
+        # DEVICE SELECTION
+        # ======================
+        if torch.cuda.is_available():
+            device = "cuda"
+            print("✅ Sử dụng GPU (CUDA)")
+        elif getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+            device = "mps"
+            print("✅ Sử dụng GPU (MPS - Apple Silicon)")
+        else:
+            device = "cpu"
+            print("⚠️ Không tìm thấy GPU, fallback về CPU")
+
+        # ======================
+        # COLLECTION + EMBEDDING
+        # ======================
         self.collection_name = collection_name
         self.client = chromadb.PersistentClient(path="./chroma_db")
         self.collection = self.get_or_create_collection(self.collection_name)
-        self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={"device": device}
+        )
         self.embedding_dim = 384  # all-MiniLM-L6-v2 có embedding dimension = 384
 
     # ======================
@@ -20,7 +41,7 @@ class EmbedStore:
     def get_or_create_collection(self, collection_name: str):
         try:
             collection = self.client.get_collection(collection_name)
-        except chromadb.errors.NotFoundError:
+        except Exception:
             collection = self.client.create_collection(collection_name)
         return collection
 
@@ -58,7 +79,7 @@ class EmbedStore:
     def file_already_embedded(self, file_name: str) -> bool:
         try:
             results = self.collection.query(
-                query_embeddings=[[0.0]*self.embedding_dim],
+                query_embeddings=[[0.0] * self.embedding_dim],
                 n_results=1,
                 include=["metadatas"]
             )

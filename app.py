@@ -1,4 +1,3 @@
-# app.py
 import os
 import streamlit as st
 from modules import embed_store, generator
@@ -22,10 +21,13 @@ uploaded_files = st.sidebar.file_uploader(
     accept_multiple_files=True
 )
 
+# Tạo thư mục uploads nếu chưa có
+os.makedirs("uploads", exist_ok=True)
+
+# Xử lý upload
 if uploaded_files:
     for uploaded_file in uploaded_files:
         temp_path = os.path.join("uploads", uploaded_file.name)
-        os.makedirs("uploads", exist_ok=True)
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
@@ -37,6 +39,17 @@ if uploaded_files:
             st.sidebar.error(f"❌ Lỗi xử lý {uploaded_file.name}: {e}")
 
 # ==========================
+# HIỂN THỊ FILE TRONG THƯ MỤC UPLOAD
+# ==========================
+st.sidebar.header("📂 Danh sách tài liệu đã upload")
+upload_files_list = os.listdir("uploads")
+if upload_files_list:
+    for f in upload_files_list:
+        st.sidebar.markdown(f"- {f}")
+else:
+    st.sidebar.info("Chưa có file nào được upload.")
+
+# ==========================
 # MAIN CHAT INTERFACE
 # ==========================
 st.subheader("💬 Chat với tài liệu của bạn")
@@ -45,13 +58,15 @@ st.subheader("💬 Chat với tài liệu của bạn")
 if "chat_history" not in st.session_state:
     st.session_state["chat_history"] = []
 
-# Input câu hỏi
-user_query = st.text_input("Nhập câu hỏi:")
+# Hiển thị chat history trước (để thanh nhập luôn nằm dưới trang)
+for speaker, msg in st.session_state["chat_history"]:
+    st.markdown(f"**{speaker}:** {msg}")
 
-if st.button("Hỏi") and user_query.strip():
-    # ==========================
-    # RETRIEVAL CONTEXT
-    # ==========================
+# Thanh hỏi đáp ở ĐÁY trang (pinned) — không thay đổi logic xử lý
+user_query = st.chat_input("Nhập câu hỏi...")
+
+if user_query and user_query.strip():
+    # Lấy context
     context_text = ""
     try:
         context_docs = store.similarity_search(user_query, k=5)
@@ -60,23 +75,14 @@ if st.button("Hỏi") and user_query.strip():
     except Exception as e:
         st.warning(f"Lỗi truy xuất context: {e}")
 
-    # ==========================
-    # GENERATE ANSWER (không streaming)
-    # ==========================
+    # Sinh câu trả lời
     try:
-        # Gom toàn bộ output từ generate_answer_stream
-        answer_chunks = generator.generate_answer_stream(user_query, context_text)
-        answer_text = "".join([chunk for chunk in answer_chunks])
-
+        answer_text = "".join(generator.generate_answer_stream(user_query, context_text))
+        # Lưu lịch sử chat
         st.session_state["chat_history"].append(("🧑", user_query))
         st.session_state["chat_history"].append(("🤖", answer_text))
+        # Hiển thị ngay tin nhắn vừa gửi/trả lời (tùy chọn)
+        st.markdown(f"**🧑:** {user_query}")
+        st.markdown(f"**🤖:** {answer_text}")
     except Exception as e:
-        st.warning(f"⚠️ Lỗi khi gọi LLM: {e}")
-
-# ==========================
-# DISPLAY CHAT HISTORY
-# ==========================
-for speaker, msg in st.session_state["chat_history"]:
-    st.markdown(f"**{speaker}:** {msg}")
-
-
+        st.error(f"⚠️ Lỗi khi gọi LLM: {e}")
